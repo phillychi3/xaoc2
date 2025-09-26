@@ -51,7 +51,7 @@ class botconfig(commands.Bot):
 
     async def on_ready(self):
         logger.info(f"登入成功 {self.user}")
-        logger.info(f"機器人ID {self.user.id}")
+        logger.info(f"機器人ID {self.user.id}") # type: ignore
         logger.info(f"總共有 {len(self.guilds)} 個伺服器")
         logger.info(f"總共有 {len(self.commands)} 個指令")
         logger.info(f"是否為測試模式: {debug}")

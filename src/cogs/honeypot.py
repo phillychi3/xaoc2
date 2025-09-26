@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 from logging import getLogger
-from core.setting import load_settings
+from core.setting import get_settings
 import datetime
 
 
@@ -9,15 +9,15 @@ class Honeypot(commands.Cog):
     def __init__(self, bot):
         self.bot: discord.Client = bot
         self.logger = getLogger("xaoc")
-        settings = load_settings()
-        self.honeypot_channel_id = settings.get("honeypot", {}).get("channel_id")
+
+        self.honeypot_channel_id = get_settings().honeypot.channel_id
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author == self.bot.user:
             return
 
-        if message.channel.id == self.honeypot_channel_id:
+        if str(message.channel.id) == self.honeypot_channel_id:
             self.logger.warning(
                 f"檢測到蜜罐觸發! 來自用戶: {message.author} ({message.author.id}) "
                 f"頻道: {message.channel} {message.channel.id})"
