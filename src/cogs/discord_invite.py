@@ -29,5 +29,5 @@ class InviteLink(commands.Cog):
                 self.logger.error(f"無法處理邀請鏈接消息: {e}, 用戶: {message.author}")
 
 
-def setup(bot):
-    bot.add_cog(InviteLink(bot))
+async def setup(bot):
+    await bot.add_cog(InviteLink(bot))

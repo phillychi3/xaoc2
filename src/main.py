@@ -1,10 +1,11 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import os
 import asyncio
 import logging
 from dotenv import load_dotenv
 from pathlib import Path
+from core.heat_system import get_heat_system
 
 load_dotenv()
 
@@ -26,6 +27,8 @@ console_handler.setFormatter(formatter)
 console_handler.setLevel(logging.INFO)
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
+
+heat = get_heat_system()
 
 
 class botconfig(commands.Bot):
@@ -51,10 +54,14 @@ class botconfig(commands.Bot):
 
     async def on_ready(self):
         logger.info(f"登入成功 {self.user}")
-        logger.info(f"機器人ID {self.user.id}") # type: ignore
+        logger.info(f"機器人ID {self.user.id}")  # type: ignore
         logger.info(f"總共有 {len(self.guilds)} 個伺服器")
         logger.info(f"總共有 {len(self.commands)} 個指令")
         logger.info(f"是否為測試模式: {debug}")
+
+    @tasks.loop(minutes=30)
+    async def periodic_heat_decay(self):
+        heat.decay_heat()
 
 
 bot = botconfig()

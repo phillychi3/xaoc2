@@ -19,3 +19,13 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 package-mode = false
+
+[tool.ruff]
+lint.select = ["E", "F"]
+lint.ignore = ["E501", "F401", "E711", "E712"]
+lint.fixable = ["A", "B", "C", "D", "E", "F"]
+lint.unfixable = []
+target-version = "py312"
+exclude = [".git", ".ruff_cache", ".venv", "venv"]
+
+line-length = 120

@@ -38,5 +38,5 @@ class Image4Fish(commands.Cog):
                 self.logger.error(f"無法處理4圖span消息: {e}, 用戶: {message.author}")
 
 
-def setup(bot):
-    bot.add_cog(Image4Fish(bot))
+async def setup(bot):
+    await bot.add_cog(Image4Fish(bot))
