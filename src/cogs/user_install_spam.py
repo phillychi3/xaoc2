@@ -1,5 +1,6 @@
 from typing import Optional, cast
 import discord
+from discord import app_commands
 from discord.ext import commands
 from logging import getLogger
 from collections import defaultdict, deque
@@ -100,19 +101,22 @@ class UserInstallSpamDetector(commands.Cog):
     async def on_app_command_completion(self, interaction: discord.Interaction, command: discord.app_commands.Command):
         pass
 
-    @commands.command(name="commandstats")
-    @commands.has_permissions(manage_messages=True)
-    async def command_stats(self, ctx: commands.Context, member: Optional[discord.Member] = None):
+    @app_commands.command(name="commandstats", description="查看用戶的指令使用統計")
+    @app_commands.default_permissions(manage_messages=True)
+    @app_commands.describe(member="要查看的用戶 (不指定則查看自己)")
+    async def command_stats(self, interaction: discord.Interaction, member: Optional[discord.Member] = None):
+        """查看用戶的指令使用統計"""
         if member is None:
-            if isinstance(ctx.author, discord.Member):
-                member = ctx.author
+            if isinstance(interaction.user, discord.Member):
+                member = interaction.user
             else:
+                await interaction.response.send_message("無法取得用戶資訊", ephemeral=True)
                 return
 
         history = self.command_history.get(member.id, deque())
 
         if not history:
-            await ctx.send(f"{member.mention} 尚未使用任何指令")
+            await interaction.response.send_message(f"{member.mention} 尚未使用任何指令", ephemeral=True)
             return
 
         now = datetime.now()
@@ -125,7 +129,7 @@ class UserInstallSpamDetector(commands.Cog):
 
         display_name = getattr(member, "display_name", getattr(member, "name", str(member.id)))
         embed = discord.Embed(
-            title=f"{display_name} 的指令統計",
+            title=f"📊 {display_name} 的指令統計",
             description="最近 5 分鐘的指令使用情況",
             color=discord.Color.blue(),
             timestamp=datetime.now(),
@@ -139,27 +143,29 @@ class UserInstallSpamDetector(commands.Cog):
             commands_text = "\n".join(f"• `{cmd}`: {count} 次" for cmd, count in top_commands)
             embed.add_field(name="最常用指令", value=commands_text, inline=False)
 
-        if ctx.guild:
-            heat_value = self.heat_system.get_user_heat_data(str(ctx.guild.id), str(member.id)).heat_value
-            danger_level = self.heat_system.get_danger_level(str(ctx.guild.id), str(member.id))
+        if interaction.guild:
+            heat_value = self.heat_system.get_user_heat_data(str(interaction.guild.id), str(member.id)).heat_value
+            danger_level = self.heat_system.get_danger_level(str(interaction.guild.id), str(member.id))
             embed.add_field(
                 name="當前熱力值",
                 value=f"{heat_value:.1f} ({danger_level})",
                 inline=False,
             )
 
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
-    @commands.command(name="clearcommandhistory")
-    @commands.has_permissions(administrator=True)
-    async def clear_command_history(self, ctx: commands.Context, member: discord.Member):
+    @app_commands.command(name="clearcommandhistory", description="清除用戶的指令歷史記錄")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(member="要清除歷史的用戶")
+    async def clear_command_history(self, interaction: discord.Interaction, member: discord.Member):
         """清除用戶的指令歷史記錄"""
         if member.id in self.command_history:
             del self.command_history[member.id]
-            await ctx.send(f"已清除 {member.mention} 的指令歷史記錄")
+            await interaction.response.send_message(f"✅ 已清除 {member.mention} 的指令歷史記錄")
         else:
-            await ctx.send(f"{member.mention} 沒有指令歷史記錄")
+            await interaction.response.send_message(f"{member.mention} 沒有指令歷史記錄", ephemeral=True)
 
 
 async def setup(bot):
     await bot.add_cog(UserInstallSpamDetector(bot))
+

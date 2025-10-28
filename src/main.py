@@ -50,7 +50,15 @@ class botconfig(commands.Bot):
                     await self.load_extension(f"cogs.{filename[:-3]}")
                     logger.info(f"加載 {filename[:-3]} 完成")
                 except Exception as e:
-                    logger.error(f"加載 {filename[:-3]} 失敗：{e}")
+                    logger.error(f"加載 {filename[:-3]} 失敗:{e}")
+
+        if debug:
+            self.tree.copy_global_to(guild=debug_guild)
+            await self.tree.sync(guild=debug_guild)
+            logger.info(f"已同步斜線指令到測試伺服器 {debug_guild.id}")
+        else:
+            await self.tree.sync()
+            logger.info("已同步斜線指令到全域")
 
     async def on_ready(self):
         logger.info(f"登入成功 {self.user}")

@@ -1,8 +1,9 @@
 from typing import Optional
 import discord
+from discord import app_commands
 from discord.ext import commands
 from logging import getLogger
-from datetime import datetime, timedelta
+from datetime import datetime
 from core.heat_system import get_heat_system
 from core.setting import get_settings
 
@@ -207,99 +208,106 @@ class QuarantineSystem(commands.Cog):
         reason = f"熱力值過高 ({heat_value:.1f}) - {danger_level}"
         await self.quarantine_user(guild, member, reason)
 
-    @commands.command(name="quarantine")
-    @commands.has_permissions(moderate_members=True)
-    async def quarantine_cmd(self, ctx: commands.Context, member: discord.Member, *, reason: str = "手動隔離"):
+    @app_commands.command(name="quarantine", description="手動將用戶移至隔離區")
+    @app_commands.default_permissions(moderate_members=True)
+    @app_commands.describe(member="要隔離的用戶", reason="隔離原因")
+    async def quarantine_cmd(self, interaction: discord.Interaction, member: discord.Member, reason: str = "手動隔離"):
         """手動將用戶移至隔離區"""
-        if not ctx.guild:
-            await ctx.send("此指令只能在伺服器中使用")
-            return
-        if member == ctx.author:
-            await ctx.send("您不能隔離自己")
+        if not interaction.guild:
+            await interaction.response.send_message("此指令只能在伺服器中使用", ephemeral=True)
             return
 
-        if getattr(ctx.author, "top_role", None) is None:
-            await ctx.send("無法獲取您的角色資訊")
+        if member == interaction.user:
+            await interaction.response.send_message("❌ 您不能隔離自己", ephemeral=True)
             return
 
-        if member.top_role >= ctx.author.top_role:  # type: ignore
-            await ctx.send("您無法隔離權限等級高於或等於您的用戶")
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("❌ 無法獲取您的角色資訊", ephemeral=True)
             return
 
-        success = await self.quarantine_user(ctx.guild, member, reason)
+        if member.top_role >= interaction.user.top_role:
+            await interaction.response.send_message("❌ 您無法隔離權限等級高於或等於您的用戶", ephemeral=True)
+            return
+
+        await interaction.response.defer()
+        success = await self.quarantine_user(interaction.guild, member, reason)
         if success:
-            await ctx.send(f"已將 {member.mention} 移至隔離區")
+            await interaction.followup.send(f"✅ 已將 {member.mention} 移至隔離區")
         else:
-            await ctx.send("隔離用戶失敗")
+            await interaction.followup.send("❌ 隔離用戶失敗")
 
-    @commands.command(name="release")
-    @commands.has_permissions(moderate_members=True)
-    async def release_cmd(self, ctx: commands.Context, member: discord.Member):
+    @app_commands.command(name="release", description="從隔離區釋放用戶")
+    @app_commands.default_permissions(moderate_members=True)
+    @app_commands.describe(member="要釋放的用戶")
+    async def release_cmd(self, interaction: discord.Interaction, member: discord.Member):
         """從隔離區釋放用戶"""
-        if not ctx.guild:
-            await ctx.send("此指令只能在伺服器中使用")
+        if not interaction.guild:
+            await interaction.response.send_message("此指令只能在伺服器中使用", ephemeral=True)
             return
-        success = await self.release_user(ctx.guild, member)
-        if success:
-            await ctx.send(f"已將 {member.mention} 從隔離區釋放")
-        else:
-            await ctx.send("釋放用戶失敗或用戶不在隔離區")
 
-    @commands.command(name="quarantinelist")
-    @commands.has_permissions(manage_messages=True)
-    async def quarantine_list(self, ctx: commands.Context):
+        await interaction.response.defer()
+        success = await self.release_user(interaction.guild, member)
+        if success:
+            await interaction.followup.send(f"✅ 已將 {member.mention} 從隔離區釋放")
+        else:
+            await interaction.followup.send("❌ 釋放用戶失敗或用戶不在隔離區")
+
+    @app_commands.command(name="quarantinelist", description="查看隔離區用戶列表")
+    @app_commands.default_permissions(manage_messages=True)
+    async def quarantine_list(self, interaction: discord.Interaction):
         """查看隔離區用戶列表"""
 
-        if not ctx.guild:
-            await ctx.send("此指令只能在伺服器中使用")
+        if not interaction.guild:
+            await interaction.response.send_message("此指令只能在伺服器中使用", ephemeral=True)
             return
-        quarantine_role = discord.utils.get(ctx.guild.roles, name=self.quarantine_role_name)
+
+        quarantine_role = discord.utils.get(interaction.guild.roles, name=self.quarantine_role_name)
 
         if not quarantine_role:
-            await ctx.send("隔離區角色不存在")
+            await interaction.response.send_message("⚠️ 隔離區角色不存在", ephemeral=True)
             return
 
-        quarantined_members = [member for member in ctx.guild.members if quarantine_role in member.roles]
+        quarantined_members = [member for member in interaction.guild.members if quarantine_role in member.roles]
 
         if not quarantined_members:
-            await ctx.send("目前沒有用戶在隔離區")
+            await interaction.response.send_message("✅ 目前沒有用戶在隔離區", ephemeral=True)
             return
 
         embed = discord.Embed(
-            title="隔離區用戶列表",
+            title="🔒 隔離區用戶列表",
             description=f"共 {len(quarantined_members)} 位用戶",
             color=discord.Color.dark_red(),
             timestamp=datetime.now(),
         )
 
         for member in quarantined_members[:25]:
-            heat_value = self.heat_system.get_user_heat_data(str(ctx.guild.id), str(member.id)).heat_value
+            heat_value = self.heat_system.get_user_heat_data(str(interaction.guild.id), str(member.id)).heat_value
             embed.add_field(
                 name=f"{member.display_name}",
                 value=f"{member.mention}\n熱力值: {heat_value:.1f}",
                 inline=True,
             )
 
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
-    @commands.command(name="setupquarantine")
-    @commands.has_permissions(administrator=True)
-    async def setup_quarantine(self, ctx: commands.Context):
+    @app_commands.command(name="setupquarantine", description="設置隔離區系統 (創建角色和權限)")
+    @app_commands.default_permissions(administrator=True)
+    async def setup_quarantine(self, interaction: discord.Interaction):
         """設置隔離區系統 (創建角色和權限)"""
-        if not ctx.guild:
-            await ctx.send("此指令只能在伺服器中使用")
+        if not interaction.guild:
+            await interaction.response.send_message("此指令只能在伺服器中使用", ephemeral=True)
             return
 
-        await ctx.send("正在設置隔離區系統...")
+        await interaction.response.send_message("⏳ 正在設置隔離區系統...")
 
-        quarantine_role = await self.get_or_create_quarantine_role(ctx.guild)
+        quarantine_role = await self.get_or_create_quarantine_role(interaction.guild)
 
         if quarantine_role:
-            await ctx.send(
-                f"隔離區系統設置完成！\n角色: {quarantine_role.mention}\n已為 {len(ctx.guild.channels)} 個頻道設置權限"
+            await interaction.edit_original_response(
+                content=f"✅ 隔離區系統設置完成！\n角色: {quarantine_role.mention}\n已為 {len(interaction.guild.channels)} 個頻道設置權限"
             )
         else:
-            await ctx.send("隔離區系統設置失敗")
+            await interaction.edit_original_response(content="❌ 隔離區系統設置失敗")
 
 
 async def setup(bot):
